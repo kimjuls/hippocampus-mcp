@@ -25,7 +25,7 @@ Claude records milestones as it works. hippocampus handles the rest — compress
 ## Quick Start
 
 ```bash
-claude mcp add hippocampus -- npx -y hippocampus-mcp
+claude mcp add hippocampus -- npx -y @julskim/hippocampus-mcp
 ```
 
 **That's it.** No hooks, no config files, no CLAUDE.md edits. hippocampus injects its own instructions into Claude's system prompt via the MCP protocol. Claude automatically knows when to save and restore.
@@ -118,7 +118,7 @@ Pass via MCP server config:
   "mcpServers": {
     "hippocampus": {
       "command": "npx",
-      "args": ["-y", "hippocampus-mcp"],
+      "args": ["-y", "@julskim/hippocampus-mcp"],
       "env": {
         "HIPPOCAMPUS_MAX_ENTRIES": "50"
       }
@@ -166,7 +166,7 @@ This MCP server handles **working memory** — what Claude is doing, where, and 
 
 **This project is maintained by a single developer.** Every line of code is reviewed and shipped by one person. External pull requests are **NOT** accepted — not because contributions aren't valued, but because a single chain of trust is the strongest defense against supply chain attacks.
 
-You're free to fork, modify, and build your own version under the MIT license. But the official `hippocampus-mcp` package on npm will always trace back to one verified author.
+You're free to fork, modify, and build your own version under the MIT license. But the official `@julskim/hippocampus-mcp` package on npm will always trace back to one verified author.
 
 ## Support This Project
 
