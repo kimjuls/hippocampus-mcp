@@ -164,9 +164,9 @@ The MCP instructions handle everything automatically. But if you want to **guara
 
 This MCP server handles **working memory** — what Claude is doing, where, and how. That makes security non-negotiable.
 
-**This project is maintained by a single developer.** Every line of code is reviewed and shipped by one person. External pull requests are not accepted — not because contributions aren't valued, but because a single chain of trust is the strongest defense against supply chain attacks.
+**This project is maintained by a single developer.** Every line of code is reviewed and shipped by one person. External pull requests are **NOT** accepted — not because contributions aren't valued, but because a single chain of trust is the strongest defense against supply chain attacks.
 
-You're free to fork, modify, and build your own version under the MIT license. But the official `mcp-hippocampus` package on npm will always trace back to one verified author.
+You're free to fork, modify, and build your own version under the MIT license. But the official `Hippocampus` package on npm will always trace back to one verified author.
 
 ## Support This Project
 
