@@ -24,7 +24,7 @@ const store = new MemoryStore({
 });
 
 const server = new McpServer(
-  { name: 'hippocampus-mcp', version: '0.1.0' },
+  { name: 'hippocampus-mcp', version: '0.1.1' },
   { instructions: INSTRUCTIONS },
 );
 
