@@ -172,12 +172,8 @@ You're free to fork, modify, and build your own version under the MIT license. B
 
 Running a solo-maintained security-conscious project takes time. If hippocampus saved your context (and your sanity), consider supporting its development:
 
-<!-- TODO: Add links after setting up funding accounts
-- [GitHub Sponsors](https://github.com/sponsors/YOUR_ID)
-- Crypto: `0xYOUR_WALLET_ADDRESS` (ETH/Polygon)
--->
-
-_Funding links coming soon._
+- [GitHub Sponsors](https://github.com/sponsors/kimjuls)
+- Crypto: `0xe5C8742E13F1c007978eb08C848e39CE16CCE4E2` (ETH / Polygon / Base)
 
 ## License
 
