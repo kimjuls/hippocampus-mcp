@@ -168,11 +168,12 @@ This MCP server handles **working memory** — what Claude is doing, where, and 
 
 You're free to fork, modify, and build your own version under the MIT license. But the official `@julskim/hippocampus-mcp` package on npm will always trace back to one verified author.
 
+**Bug reports and feature requests are welcome.** Open a [GitHub Issue](https://github.com/kimjuls/hippocampus-mcp/issues) — every report is reviewed and addressed promptly. No PR needed; just describe the problem or idea, and it will be handled.
+
 ## Support This Project
 
 Running a solo-maintained security-conscious project takes time. If hippocampus saved your context (and your sanity), consider supporting its development:
 
-- [GitHub Sponsors](https://github.com/sponsors/kimjuls)
 - Crypto: `0xe5C8742E13F1c007978eb08C848e39CE16CCE4E2` (ETH / Polygon / Base)
 
 ## License
