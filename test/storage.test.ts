@@ -19,42 +19,42 @@ describe('MemoryStore', () => {
   });
 
   describe('save', () => {
-    it('current_task와 next_step을 저장한다', () => {
+    it('saves current_task and next_step', () => {
       store.save({
         session_id: SESSION,
         project_dir: PROJECT,
-        current_task: '인증 구현',
-        next_step: '테스트 작성',
+        current_task: 'implement auth',
+        next_step: 'write tests',
       });
 
       const view = store.load(SESSION);
       expect(view).not.toBeNull();
-      expect(view!.current_task).toBe('인증 구현');
-      expect(view!.next_step).toBe('테스트 작성');
+      expect(view!.current_task).toBe('implement auth');
+      expect(view!.next_step).toBe('write tests');
     });
 
-    it('event 없이 호출하면 journey에 추가하지 않는다', () => {
+    it('does not add to journey when called without event', () => {
       const result = store.save({
         session_id: SESSION,
         project_dir: PROJECT,
-        current_task: '작업 중',
-        next_step: '다음',
+        current_task: 'working',
+        next_step: 'next',
       });
 
       expect(result.snapshot_id).toBeNull();
       expect(result.journey_count).toBe(0);
     });
 
-    it('event가 있으면 journey에 추가하고 시퀀스를 증가시킨다', () => {
+    it('adds to journey and increments sequence when event is provided', () => {
       const result = store.save({
         session_id: SESSION,
         project_dir: PROJECT,
-        current_task: '작업 중',
-        next_step: '다음',
+        current_task: 'working',
+        next_step: 'next',
         event: {
           importance: 'major',
-          detail: 'JWT 인증 구현 완료',
-          summary: '인증 완료',
+          detail: 'JWT auth implementation complete',
+          summary: 'auth complete',
         },
       });
 
@@ -63,34 +63,33 @@ describe('MemoryStore', () => {
       expect(result.journey_count).toBe(1);
     });
 
-    it('current_task와 next_step은 항상 덮어쓴다', () => {
+    it('always overwrites current_task and next_step', () => {
       store.save({
         session_id: SESSION,
         project_dir: PROJECT,
-        current_task: '첫 번째',
-        next_step: '첫 번째 다음',
+        current_task: 'first',
+        next_step: 'first next',
       });
 
       store.save({
         session_id: SESSION,
         project_dir: PROJECT,
-        current_task: '두 번째',
-        next_step: '두 번째 다음',
+        current_task: 'second',
+        next_step: 'second next',
       });
 
       const view = store.load(SESSION);
-      expect(view!.current_task).toBe('두 번째');
-      expect(view!.next_step).toBe('두 번째 다음');
+      expect(view!.current_task).toBe('second');
+      expect(view!.next_step).toBe('second next');
     });
   });
 
   describe('load', () => {
-    it('존재하지 않는 세션은 null을 반환한다', () => {
+    it('returns null for nonexistent session', () => {
       expect(store.load('nonexistent')).toBeNull();
     });
 
-    it('journey의 content는 age에 따라 detail 또는 summary를 반환한다', () => {
-      // minor_compress_after 기본값 5, major_compress_after 기본값 10
+    it('returns detail or summary for journey content based on age', () => {
       store = createStore({
         gc: { minor_compress_after: 2, minor_delete_after: 100, major_compress_after: 3, max_entries: 30 },
       });
@@ -99,21 +98,21 @@ describe('MemoryStore', () => {
       store.save({
         session_id: SESSION, project_dir: PROJECT,
         current_task: 't', next_step: 'n',
-        event: { importance: 'minor', detail: 'minor 상세', summary: 'minor 요약' },
+        event: { importance: 'minor', detail: 'minor detail', summary: 'minor summary' },
       });
       // seq 2: major
       store.save({
         session_id: SESSION, project_dir: PROJECT,
         current_task: 't', next_step: 'n',
-        event: { importance: 'major', detail: 'major 상세', summary: 'major 요약' },
+        event: { importance: 'major', detail: 'major detail', summary: 'major summary' },
       });
 
-      // seq=2 시점: minor(seq1) age=1 < 2 → detail, major(seq2) age=0 < 3 → detail
+      // at seq=2: minor(seq1) age=1 < 2 → detail, major(seq2) age=0 < 3 → detail
       let view = store.load(SESSION)!;
-      expect(view.journey[0].content).toBe('minor 상세');
-      expect(view.journey[1].content).toBe('major 상세');
+      expect(view.journey[0].content).toBe('minor detail');
+      expect(view.journey[1].content).toBe('major detail');
 
-      // seq 3, 4 추가해서 age를 올린다
+      // add seq 3, 4 to increase age
       store.save({
         session_id: SESSION, project_dir: PROJECT,
         current_task: 't', next_step: 'n',
@@ -125,26 +124,26 @@ describe('MemoryStore', () => {
         event: { importance: 'minor', detail: 'd4', summary: 's4' },
       });
 
-      // seq=4: minor(seq1) age=3 ≥ 2 → summary, major(seq2) age=2 < 3 → detail
+      // at seq=4: minor(seq1) age=3 >= 2 → summary, major(seq2) age=2 < 3 → detail
       view = store.load(SESSION)!;
-      expect(view.journey[0].content).toBe('minor 요약');
-      expect(view.journey[1].content).toBe('major 상세');
+      expect(view.journey[0].content).toBe('minor summary');
+      expect(view.journey[1].content).toBe('major detail');
 
-      // 1개 더 추가
+      // add one more
       store.save({
         session_id: SESSION, project_dir: PROJECT,
         current_task: 't', next_step: 'n',
         event: { importance: 'minor', detail: 'd5', summary: 's5' },
       });
 
-      // seq=5: major(seq2) age=3 ≥ 3 → summary
+      // at seq=5: major(seq2) age=3 >= 3 → summary
       view = store.load(SESSION)!;
-      expect(view.journey[1].content).toBe('major 요약');
+      expect(view.journey[1].content).toBe('major summary');
     });
   });
 
-  describe('GC — minor 삭제', () => {
-    it('minor는 minor_delete_after 사이클 후 삭제된다', () => {
+  describe('GC — minor deletion', () => {
+    it('deletes minor entries after minor_delete_after cycles', () => {
       store = createStore({
         gc: { minor_compress_after: 1, minor_delete_after: 3, major_compress_after: 10, max_entries: 30 },
       });
@@ -153,10 +152,10 @@ describe('MemoryStore', () => {
       store.save({
         session_id: SESSION, project_dir: PROJECT,
         current_task: 't', next_step: 'n',
-        event: { importance: 'minor', detail: '사소한 작업', summary: '사소' },
+        event: { importance: 'minor', detail: 'trivial work', summary: 'trivial' },
       });
 
-      // seq 2, 3, 4 추가
+      // seq 2, 3, 4
       for (let i = 0; i < 3; i++) {
         store.save({
           session_id: SESSION, project_dir: PROJECT,
@@ -165,16 +164,16 @@ describe('MemoryStore', () => {
         });
       }
 
-      // seq=4: minor(seq1) age=3 ≥ 3 → 삭제
+      // at seq=4: minor(seq1) age=3 >= 3 → deleted
       const view = store.load(SESSION)!;
-      const hasMinor = view.journey.some((e) => e.content === '사소');
+      const hasMinor = view.journey.some((e) => e.content === 'trivial');
       expect(hasMinor).toBe(false);
-      expect(view.journey.length).toBe(3); // major 3개만
+      expect(view.journey.length).toBe(3);
     });
   });
 
-  describe('GC — major는 age로 삭제되지 않는다', () => {
-    it('major는 아무리 오래되어도 age 기반으로는 삭제되지 않는다', () => {
+  describe('GC — major entries are never deleted by age', () => {
+    it('major entries persist regardless of age', () => {
       store = createStore({
         gc: { minor_compress_after: 1, minor_delete_after: 3, major_compress_after: 2, max_entries: 30 },
       });
@@ -183,10 +182,10 @@ describe('MemoryStore', () => {
       store.save({
         session_id: SESSION, project_dir: PROJECT,
         current_task: 't', next_step: 'n',
-        event: { importance: 'major', detail: '아키텍처 결정', summary: '결정' },
+        event: { importance: 'major', detail: 'architecture decision', summary: 'decision' },
       });
 
-      // seq 2~20 추가
+      // seq 2~20
       for (let i = 0; i < 19; i++) {
         store.save({
           session_id: SESSION, project_dir: PROJECT,
@@ -195,20 +194,20 @@ describe('MemoryStore', () => {
         });
       }
 
-      // seq=20: major(seq1) age=19 — 여전히 존재
+      // at seq=20: major(seq1) age=19 — still exists
       const view = store.load(SESSION)!;
-      expect(view.journey[0].content).toBe('결정'); // summary로 표시
+      expect(view.journey[0].content).toBe('decision');
       expect(view.journey.length).toBe(20);
     });
   });
 
-  describe('GC — 용량 제한', () => {
-    it('max_entries 초과 시 minor를 먼저 삭제한다', () => {
+  describe('GC — capacity limit', () => {
+    it('deletes minor entries first when exceeding max_entries', () => {
       store = createStore({
         gc: { minor_compress_after: 1, minor_delete_after: 100, major_compress_after: 1, max_entries: 5 },
       });
 
-      // minor 3개 + major 3개 = 6개 (max 5 초과)
+      // 3 minor + 3 major = 6 (exceeds max 5)
       for (let i = 0; i < 3; i++) {
         store.save({
           session_id: SESSION, project_dir: PROJECT,
@@ -227,16 +226,15 @@ describe('MemoryStore', () => {
       const view = store.load(SESSION)!;
       expect(view.journey.length).toBeLessThanOrEqual(5);
 
-      // minor가 먼저 삭제되었는지 확인
       const minorCount = view.journey.filter((e) => e.importance === 'minor').length;
       const majorCount = view.journey.filter((e) => e.importance === 'major').length;
-      expect(majorCount).toBe(3); // major는 모두 유지
-      expect(minorCount).toBeLessThanOrEqual(2); // minor 중 일부 삭제
+      expect(majorCount).toBe(3);
+      expect(minorCount).toBeLessThanOrEqual(2);
     });
   });
 
   describe('list', () => {
-    it('전체 세션 목록을 반환한다', () => {
+    it('returns all sessions', () => {
       store.save({ session_id: 'a', project_dir: '/a', current_task: 'ta', next_step: 'na' });
       store.save({ session_id: 'b', project_dir: '/b', current_task: 'tb', next_step: 'nb' });
 
@@ -245,7 +243,7 @@ describe('MemoryStore', () => {
       expect(list.map((s) => s.session_id).sort()).toEqual(['a', 'b']);
     });
 
-    it('특정 세션만 조회한다', () => {
+    it('returns only the specified session', () => {
       store.save({ session_id: 'a', project_dir: '/a', current_task: 'ta', next_step: 'na' });
       store.save({ session_id: 'b', project_dir: '/b', current_task: 'tb', next_step: 'nb' });
 
@@ -256,17 +254,17 @@ describe('MemoryStore', () => {
   });
 
   describe('delete', () => {
-    it('세션 전체를 삭제한다', () => {
+    it('deletes an entire session', () => {
       store.save({ session_id: SESSION, project_dir: PROJECT, current_task: 't', next_step: 'n' });
       expect(store.delete(SESSION)).toBe(true);
       expect(store.load(SESSION)).toBeNull();
     });
 
-    it('특정 항목을 삭제한다', () => {
+    it('deletes a specific entry', () => {
       const result = store.save({
         session_id: SESSION, project_dir: PROJECT,
         current_task: 't', next_step: 'n',
-        event: { importance: 'major', detail: '삭제 대상', summary: '삭제' },
+        event: { importance: 'major', detail: 'delete target', summary: 'delete' },
       });
 
       expect(store.delete(SESSION, result.snapshot_id!)).toBe(true);
@@ -274,13 +272,13 @@ describe('MemoryStore', () => {
       expect(view.journey.length).toBe(0);
     });
 
-    it('존재하지 않는 항목 삭제 시 false를 반환한다', () => {
+    it('returns false when deleting nonexistent entry', () => {
       expect(store.delete('nonexistent')).toBe(false);
     });
   });
 
-  describe('세션 수 제한', () => {
-    it('max_sessions 초과 시 가장 오래된 세션이 삭제된다', () => {
+  describe('session limit', () => {
+    it('deletes oldest session when exceeding max_sessions', () => {
       store = createStore({ max_sessions: 3 });
 
       for (let i = 0; i < 4; i++) {
@@ -293,7 +291,6 @@ describe('MemoryStore', () => {
 
       const list = store.list();
       expect(list.length).toBe(3);
-      // session-0 (가장 오래된)이 삭제됨
       expect(list.find((s) => s.session_id === 'session-0')).toBeUndefined();
     });
   });

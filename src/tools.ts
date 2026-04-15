@@ -7,20 +7,20 @@ export function registerTools(server: McpServer, store: MemoryStore): void {
     'save_memory',
     'Call after completing a meaningful milestone (feature, bug fix, architecture decision, multi-file refactor) or before /compact. Records current_task/next_step and optionally appends a milestone event to the journey. GC runs automatically.',
     {
-      session_id: z.string().describe('Claude Code 세션 ID'),
-      project_dir: z.string().describe('현재 작업 디렉토리'),
-      current_task: z.string().describe('지금 하고 있는 작업'),
-      next_step: z.string().describe('다음에 해야 할 작업'),
+      session_id: z.string().describe('Claude Code session ID'),
+      project_dir: z.string().describe('Current working directory'),
+      current_task: z.string().describe('What you are working on now'),
+      next_step: z.string().describe('What to do next'),
       event: z
         .object({
           importance: z.enum(['major', 'minor']).describe(
-            'major: 기능 구현, 아키텍처 결정, 버그 수정, 다파일 리팩토링. minor: 설정 수정, 포맷팅, 단일 파일 소규모 수정',
+            'major: feature impl, architecture decision, bug fix, multi-file refactor. minor: config change, formatting, single-file tweak',
           ),
-          detail: z.string().describe('상세 기록 (압축 전 원문)'),
-          summary: z.string().describe('압축 기록 (한 줄 요약)'),
+          detail: z.string().describe('Full context (pre-compression original)'),
+          summary: z.string().describe('One-line compressed version'),
         })
         .optional()
-        .describe('마일스톤이 있을 때만 전달'),
+        .describe('Only pass when there is a milestone to record'),
     },
     async (args) => {
       const result = store.save(args);
@@ -39,13 +39,13 @@ export function registerTools(server: McpServer, store: MemoryStore): void {
     'load_memory',
     'Call after /compact, context summary, or at session start to restore working context. Returns a MemoryView with auto-compressed/pruned journey entries.',
     {
-      session_id: z.string().describe('Claude Code 세션 ID'),
+      session_id: z.string().describe('Claude Code session ID'),
     },
     async ({ session_id }) => {
       const view = store.load(session_id);
       if (!view) {
         return {
-          content: [{ type: 'text' as const, text: '저장된 기억이 없습니다.' }],
+          content: [{ type: 'text' as const, text: 'No saved memory found.' }],
           isError: true,
         };
       }
@@ -62,9 +62,9 @@ export function registerTools(server: McpServer, store: MemoryStore): void {
 
   server.tool(
     'list_memories',
-    '저장된 세션 목록 조회. session_id 미지정 시 전체 세션 요약.',
+    'List saved sessions. Returns all session summaries if session_id is omitted.',
     {
-      session_id: z.string().optional().describe('특정 세션 ID (미지정 시 전체)'),
+      session_id: z.string().optional().describe('Specific session ID (omit for all)'),
     },
     async ({ session_id }) => {
       const list = store.list(session_id);
@@ -74,7 +74,7 @@ export function registerTools(server: McpServer, store: MemoryStore): void {
             type: 'text' as const,
             text: list.length > 0
               ? JSON.stringify(list, null, 2)
-              : '저장된 세션이 없습니다.',
+              : 'No saved sessions found.',
           },
         ],
       };
@@ -83,10 +83,10 @@ export function registerTools(server: McpServer, store: MemoryStore): void {
 
   server.tool(
     'delete_memory',
-    '기억 삭제. entry_id 미지정 시 세션 전체 삭제.',
+    'Delete memory. Deletes entire session if entry_id is omitted.',
     {
-      session_id: z.string().describe('세션 ID'),
-      entry_id: z.string().optional().describe('삭제할 항목 ID (미지정 시 세션 전체 삭제)'),
+      session_id: z.string().describe('Session ID'),
+      entry_id: z.string().optional().describe('Entry ID to delete (omit to delete entire session)'),
     },
     async ({ session_id, entry_id }) => {
       const deleted = store.delete(session_id, entry_id);
@@ -94,7 +94,7 @@ export function registerTools(server: McpServer, store: MemoryStore): void {
         content: [
           {
             type: 'text' as const,
-            text: deleted ? '삭제 완료.' : '해당 항목을 찾을 수 없습니다.',
+            text: deleted ? 'Deleted.' : 'Entry not found.',
           },
         ],
       };

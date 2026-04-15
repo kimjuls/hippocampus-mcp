@@ -40,7 +40,6 @@ export class MemoryStore {
     this.restore();
   }
 
-  /** 마일스톤 기록 + 현재 상태 갱신 */
   save(input: SaveMemoryInput): SaveResult {
     let session = this.sessions.get(input.session_id);
     if (!session) {
@@ -74,7 +73,6 @@ export class MemoryStore {
       snapshotId = entry.id;
     }
 
-    // 세션 수 제한은 상태 갱신 후 실행 (새 세션의 sequence가 반영된 후)
     this.enforceMaxSessions(input.session_id);
     const gcResult = this.gc(input.session_id);
     this.persist();
@@ -87,7 +85,6 @@ export class MemoryStore {
     };
   }
 
-  /** 기억 복원 — GC 적용 후 MemoryView 반환 */
   load(sessionId: string): MemoryView | null {
     const session = this.sessions.get(sessionId);
     if (!session) return null;
@@ -98,7 +95,6 @@ export class MemoryStore {
     return this.buildView(session);
   }
 
-  /** 세션 목록 조회 */
   list(sessionId?: string): SessionSummary[] {
     if (sessionId) {
       const session = this.sessions.get(sessionId);
@@ -109,7 +105,6 @@ export class MemoryStore {
     return Array.from(this.sessions.values()).map((s) => this.buildSummary(s));
   }
 
-  /** 특정 항목 삭제 */
   delete(sessionId: string, entryId?: string): boolean {
     if (!entryId) {
       const existed = this.sessions.delete(sessionId);
@@ -128,7 +123,6 @@ export class MemoryStore {
     return true;
   }
 
-  /** GC — age 기반 압축 표시 + 삭제 */
   gc(sessionId: string): GCResult {
     const session = this.sessions.get(sessionId);
     if (!session) return { compressed: 0, deleted: 0 };
@@ -139,7 +133,6 @@ export class MemoryStore {
 
     let deleted = 0;
 
-    // age 기반 삭제 (minor만)
     session.journey = session.journey.filter((entry) => {
       const age = currentSeq - entry.sequence;
       if (entry.importance === 'minor' && age >= minor_delete_after) {
@@ -149,22 +142,17 @@ export class MemoryStore {
       return true;
     });
 
-    // 용량 기반 삭제
     while (session.journey.length > max_entries) {
-      // minor summary(오래된 것)부터 삭제
       const minorIdx = this.findOldestMinor(session.journey);
       if (minorIdx !== -1) {
         session.journey.splice(minorIdx, 1);
         deleted++;
         continue;
       }
-      // minor 없으면 major 중 가장 오래된 것 삭제
       session.journey.shift();
       deleted++;
     }
 
-    // compressed 카운트: 현재 detail→summary 전환 대상 수
-    // (실제 전환은 buildView에서 수행, 내부 데이터는 detail/summary 모두 보존)
     let compressed = 0;
     for (const entry of session.journey) {
       const age = currentSeq - entry.sequence;
@@ -178,7 +166,6 @@ export class MemoryStore {
     return { compressed, deleted };
   }
 
-  /** 파일에 저장 (atomic write) */
   persist(): void {
     if (!this.config.persist) return;
 
@@ -196,7 +183,6 @@ export class MemoryStore {
     renameSync(tmpPath, filePath);
   }
 
-  /** 파일에서 복원 */
   restore(): void {
     if (!this.config.persist) return;
 
@@ -207,11 +193,10 @@ export class MemoryStore {
         this.sessions = new Map(Object.entries(data.sessions));
       }
     } catch {
-      // 파일 없거나 파싱 실패 — 빈 상태로 시작
+      // No file or parse error — start fresh
     }
   }
 
-  /** MemoryView 생성 — age에 따라 detail/summary 선택 */
   private buildView(session: SessionMemory): MemoryView {
     const { minor_compress_after, major_compress_after } = this.config.gc;
     const currentSeq = session.sequence;
@@ -246,7 +231,6 @@ export class MemoryStore {
     };
   }
 
-  /** journey에서 가장 오래된 minor 항목의 인덱스 */
   private findOldestMinor(journey: MemoryEntry[]): number {
     for (let i = 0; i < journey.length; i++) {
       if (journey[i].importance === 'minor') return i;
@@ -254,10 +238,8 @@ export class MemoryStore {
     return -1;
   }
 
-  /** 세션 수 제한 — 가장 오래된 세션 삭제 (현재 세션 제외) */
   private enforceMaxSessions(currentSessionId: string): void {
     while (this.sessions.size > this.config.max_sessions) {
-      // Map은 삽입 순서 보장 — 첫 번째부터 순회하여 현재 세션이 아닌 가장 오래된 것 삭제
       let targetKey: string | null = null;
       for (const key of this.sessions.keys()) {
         if (key !== currentSessionId) {

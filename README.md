@@ -183,7 +183,3 @@ _Funding links coming soon._
 ## License
 
 [MIT](./LICENSE)
-
-## Design
-
-For the full architecture, GC engine internals, and design rationale, see [docs/DESIGN.md](./docs/DESIGN.md).

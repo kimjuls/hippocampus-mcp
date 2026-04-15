@@ -1,7 +1,3 @@
-/**
- * MCP 서버 연결 시 Claude 시스템 프롬프트에 자동 포함되는 instructions.
- * 최대한 간결하게 유지 — 매 턴 컨텍스트를 소비한다.
- */
 export const INSTRUCTIONS = `\
 hippocampus preserves working context across /compact. It auto-compresses old memories and deletes trivial ones — you just record milestones.
 

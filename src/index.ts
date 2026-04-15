@@ -34,7 +34,7 @@ registerPrompts(server);
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('[hippocampus] MCP 서버 시작 (stdio)');
+  console.error('[hippocampus] MCP server started (stdio)');
 }
 
 main().catch((err) => {

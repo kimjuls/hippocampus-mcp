@@ -1,7 +1,7 @@
 {
   "name": "mcp-hippocampus",
   "version": "0.1.0",
-  "description": "Claude Code 컨텍스트 compact 시 작업 상태를 보존하는 MCP 서버 — 해마 모델 기반 기억 라이프사이클 관리",
+  "description": "Working memory for Claude Code — preserves task context across /compact with hippocampus-inspired memory lifecycle",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
