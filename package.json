@@ -1,0 +1,44 @@
+{
+  "name": "mcp-hippocampus",
+  "version": "0.1.0",
+  "description": "Claude Code 컨텍스트 compact 시 작업 상태를 보존하는 MCP 서버 — 해마 모델 기반 기억 라이프사이클 관리",
+  "type": "module",
+  "main": "dist/index.js",
+  "bin": {
+    "mcp-hippocampus": "dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsx src/index.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "mcp",
+    "claude",
+    "claude-code",
+    "context",
+    "memory",
+    "hippocampus",
+    "compact"
+  ],
+  "license": "MIT",
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.12.0",
+    "nanoid": "^5.1.0",
+    "zod": "^3.24.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.7.0",
+    "vitest": "^3.1.0"
+  }
+}
