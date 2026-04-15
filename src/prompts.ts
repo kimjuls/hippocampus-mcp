@@ -58,7 +58,7 @@ export function registerPrompts(server: McpServer): void {
 2. Review recent context from journey (respect already-made decisions)
 3. Resume work according to next_step
 
-Report to user: "[hippocampus] Working state restored: {current_task summary}"`,
+Report to user: "[hippocampus-mcp] Working state restored: {current_task summary}"`,
           },
         },
       ],

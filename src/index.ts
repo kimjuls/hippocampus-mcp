@@ -24,7 +24,7 @@ const store = new MemoryStore({
 });
 
 const server = new McpServer(
-  { name: 'hippocampus', version: '0.1.0' },
+  { name: 'hippocampus-mcp', version: '0.1.0' },
   { instructions: INSTRUCTIONS },
 );
 
@@ -34,10 +34,10 @@ registerPrompts(server);
 async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
-  console.error('[hippocampus] MCP server started (stdio)');
+  console.error('[hippocampus-mcp] MCP server started (stdio)');
 }
 
 main().catch((err) => {
-  console.error('[hippocampus] Fatal:', err);
+  console.error('[hippocampus-mcp] Fatal:', err);
   process.exit(1);
 });
