@@ -5,7 +5,7 @@ import type { MemoryStore } from './storage.js';
 export function registerTools(server: McpServer, store: MemoryStore): void {
   server.tool(
     'save_memory',
-    'compact 전 작업 상태 저장. 마일스톤(event)이 있으면 journey에 추가하고, current_task/next_step을 갱신한다. GC가 자동 실행된다.',
+    'Call after completing a meaningful milestone (feature, bug fix, architecture decision, multi-file refactor) or before /compact. Records current_task/next_step and optionally appends a milestone event to the journey. GC runs automatically.',
     {
       session_id: z.string().describe('Claude Code 세션 ID'),
       project_dir: z.string().describe('현재 작업 디렉토리'),
@@ -37,7 +37,7 @@ export function registerTools(server: McpServer, store: MemoryStore): void {
 
   server.tool(
     'load_memory',
-    'compact 후 작업 상태 복원. GC가 적용되어 오래된 기억은 자동 압축/삭제된 MemoryView를 반환한다.',
+    'Call after /compact, context summary, or at session start to restore working context. Returns a MemoryView with auto-compressed/pruned journey entries.',
     {
       session_id: z.string().describe('Claude Code 세션 ID'),
     },

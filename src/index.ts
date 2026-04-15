@@ -5,6 +5,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { MemoryStore } from './storage.js';
 import { registerTools } from './tools.js';
 import { registerPrompts } from './prompts.js';
+import { INSTRUCTIONS } from './instructions.js';
 import { resolve } from 'node:path';
 import { homedir } from 'node:os';
 
@@ -22,10 +23,10 @@ const store = new MemoryStore({
   },
 });
 
-const server = new McpServer({
-  name: 'hippocampus',
-  version: '0.1.0',
-});
+const server = new McpServer(
+  { name: 'hippocampus', version: '0.1.0' },
+  { instructions: INSTRUCTIONS },
+);
 
 registerTools(server, store);
 registerPrompts(server);

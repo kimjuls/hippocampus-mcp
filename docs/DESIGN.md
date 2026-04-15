@@ -291,20 +291,27 @@ Claude Code Session
 
 ## Claude Code 연동
 
-### MCP 서버 등록
+### MCP 서버 등록 — 이것만 하면 끝
 
-```json
-{
-  "mcpServers": {
-    "hippocampus": {
-      "command": "npx",
-      "args": ["-y", "mcp-hippocampus"]
-    }
-  }
-}
+```bash
+claude mcp add hippocampus -- npx -y mcp-hippocampus
 ```
 
-### Hook 자동 트리거 (선택 사항)
+서버가 연결되면 MCP `instructions`가 Claude 시스템 프롬프트에 자동 포함된다.
+Claude는 instructions를 통해 save_memory/load_memory 호출 타이밍을 인지하고, 추가 설정 없이 자동으로 동작한다.
+
+### 동작 원리: Instructions + Tool Description
+
+hippocampus는 두 계층으로 Claude에게 행동 규칙을 전달한다:
+
+1. **Server Instructions** (`src/instructions.ts`): 서버 연결 시 시스템 프롬프트에 포함. 전체 워크플로우(언제 save, 언제 load)를 간결하게 기술.
+2. **Tool Description** (`src/tools.ts`): 각 도구의 호출 조건을 구체적으로 명시. "무엇을 하는지"뿐 아니라 "언제 써야 하는지"도 포함.
+
+이 조합으로 hook 설정, CLAUDE.md 수정 등 **추가 설정 없이** `claude mcp add`만으로 완전히 동작한다.
+
+### Hook (선택적 보강)
+
+instructions만으로 충분하지만, compact 전후 호출을 더 확실히 보장하고 싶다면 hook을 추가할 수 있다:
 
 ```json
 {
