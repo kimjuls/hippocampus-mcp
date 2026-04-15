@@ -174,7 +174,6 @@ Running a solo-maintained security-conscious project takes time. If hippocampus 
 
 <!-- TODO: Add links after setting up funding accounts
 - [GitHub Sponsors](https://github.com/sponsors/YOUR_ID)
-- [Buy Me a Coffee](https://buymeacoffee.com/YOUR_ID)
 - Crypto: `0xYOUR_WALLET_ADDRESS` (ETH/Polygon)
 -->
 
