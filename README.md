@@ -25,7 +25,7 @@ Claude records milestones as it works. hippocampus handles the rest — compress
 ## Quick Start
 
 ```bash
-claude mcp add hippocampus -- npx -y mcp-hippocampus
+claude mcp add hippocampus -- npx -y hippocampus
 ```
 
 **That's it.** No hooks, no config files, no CLAUDE.md edits. hippocampus injects its own instructions into Claude's system prompt via the MCP protocol. Claude automatically knows when to save and restore.
