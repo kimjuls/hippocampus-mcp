@@ -6,6 +6,14 @@ export interface MemoryEntry {
   summary: string;
 }
 
+export interface CompactSnapshot {
+  session_id: string;
+  transcript_path: string;
+  timestamp: number;
+  trigger: 'auto' | 'manual';
+  message_count: number;
+}
+
 export interface SessionMemory {
   session_id: string;
   project_dir: string;
@@ -13,12 +21,14 @@ export interface SessionMemory {
   next_step: string;
   journey: MemoryEntry[];
   sequence: number;
+  last_compact?: CompactSnapshot;
 }
 
 export interface MemoryView {
   current_task: string;
   next_step: string;
   journey: MemoryViewEntry[];
+  last_compact?: CompactSnapshot;
 }
 
 export interface MemoryViewEntry {
@@ -40,6 +50,7 @@ export interface StorageConfig {
   storage_path: string;
   max_sessions: number;
   gc: GCConfig;
+  compact_tail_n: number;
 }
 
 export interface StorageFile {

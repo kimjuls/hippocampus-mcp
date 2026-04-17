@@ -6,32 +6,42 @@ import { MemoryStore } from './storage.js';
 import { registerTools } from './tools.js';
 import { registerPrompts } from './prompts.js';
 import { INSTRUCTIONS } from './instructions.js';
+import { run as runInstaller } from './installer.js';
+import { handle as handlePreCompact } from './precompact.js';
 import { resolve } from 'node:path';
 import { homedir } from 'node:os';
 
-const store = new MemoryStore({
-  persist: process.env.HIPPOCAMPUS_PERSIST !== 'false',
-  storage_path:
-    process.env.HIPPOCAMPUS_STORAGE_PATH ||
-    resolve(homedir(), '.hippocampus', 'memory.json'),
-  max_sessions: Number(process.env.HIPPOCAMPUS_MAX_SESSIONS) || 20,
-  gc: {
-    minor_compress_after: Number(process.env.HIPPOCAMPUS_MINOR_COMPRESS) || 5,
-    minor_delete_after: Number(process.env.HIPPOCAMPUS_MINOR_DELETE) || 15,
-    major_compress_after: Number(process.env.HIPPOCAMPUS_MAJOR_COMPRESS) || 10,
-    max_entries: Number(process.env.HIPPOCAMPUS_MAX_ENTRIES) || 30,
-  },
-});
-
-const server = new McpServer(
-  { name: 'hippocampus-mcp', version: '0.1.1' },
-  { instructions: INSTRUCTIONS },
-);
-
-registerTools(server, store);
-registerPrompts(server);
-
 async function main() {
+  if (process.argv.includes('--precompact')) {
+    await handlePreCompact();
+    return;
+  }
+
+  runInstaller();
+
+  const store = new MemoryStore({
+    persist: process.env.HIPPOCAMPUS_PERSIST !== 'false',
+    storage_path:
+      process.env.HIPPOCAMPUS_STORAGE_PATH ||
+      resolve(homedir(), '.hippocampus', 'memory.json'),
+    max_sessions: Number(process.env.HIPPOCAMPUS_MAX_SESSIONS) || 20,
+    gc: {
+      minor_compress_after: Number(process.env.HIPPOCAMPUS_MINOR_COMPRESS) || 5,
+      minor_delete_after: Number(process.env.HIPPOCAMPUS_MINOR_DELETE) || 15,
+      major_compress_after: Number(process.env.HIPPOCAMPUS_MAJOR_COMPRESS) || 10,
+      max_entries: Number(process.env.HIPPOCAMPUS_MAX_ENTRIES) || 30,
+    },
+    compact_tail_n: Number(process.env.HIPPOCAMPUS_COMPACT_TAIL_N) || 20,
+  });
+
+  const server = new McpServer(
+    { name: 'hippocampus-mcp', version: '0.2.0' },
+    { instructions: INSTRUCTIONS },
+  );
+
+  registerTools(server, store);
+  registerPrompts(server);
+
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error('[hippocampus-mcp] MCP server started (stdio)');

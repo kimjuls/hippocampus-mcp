@@ -1,4 +1,4 @@
-import { writeFileSync, readFileSync, mkdirSync, renameSync } from 'node:fs';
+import { writeFileSync, readFileSync, mkdirSync, renameSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { homedir } from 'node:os';
 import { nanoid } from 'nanoid';
@@ -13,6 +13,7 @@ import type {
   SaveResult,
   SessionSummary,
   StorageFile,
+  CompactSnapshot,
 } from './types.js';
 
 const DEFAULT_CONFIG: StorageConfig = {
@@ -25,7 +26,62 @@ const DEFAULT_CONFIG: StorageConfig = {
     major_compress_after: 10,
     max_entries: 30,
   },
+  compact_tail_n: 20,
 };
+
+export function readTranscriptTail(path: string, n: number): string[] {
+  if (!existsSync(path)) return [];
+  try {
+    const raw = readFileSync(path, 'utf-8');
+    const lines = raw.split('\n').filter((l) => l.trim().length > 0);
+    return lines.slice(-n).map(summarizeTranscriptLine);
+  } catch {
+    return [];
+  }
+}
+
+function summarizeTranscriptLine(line: string): string {
+  try {
+    const entry = JSON.parse(line);
+    const type = entry.type ?? 'unknown';
+
+    if (type === 'user') {
+      const text = extractText(entry.message?.content);
+      return `[user] ${truncate(text, 200)}`;
+    }
+    if (type === 'assistant') {
+      const blocks = entry.message?.content;
+      if (Array.isArray(blocks)) {
+        const parts: string[] = [];
+        for (const block of blocks) {
+          if (block?.type === 'text' && typeof block.text === 'string') {
+            parts.push(truncate(block.text, 200));
+          } else if (block?.type === 'tool_use') {
+            parts.push(`[tool_use:${block.name ?? '?'}]`);
+          }
+        }
+        return `[assistant] ${parts.join(' ')}`;
+      }
+    }
+    return `[${type}]`;
+  } catch {
+    return truncate(line, 200);
+  }
+}
+
+function extractText(content: unknown): string {
+  if (typeof content === 'string') return content;
+  if (Array.isArray(content)) {
+    const block = content.find((b) => b && typeof b === 'object' && (b as { type?: string }).type === 'text');
+    const text = (block as { text?: string } | undefined)?.text;
+    return typeof text === 'string' ? text : '';
+  }
+  return '';
+}
+
+function truncate(s: string, max: number): string {
+  return s.length > max ? `${s.slice(0, max)}…` : s;
+}
 
 export class MemoryStore {
   private sessions = new Map<string, SessionMemory>();
@@ -103,6 +159,24 @@ export class MemoryStore {
     }
 
     return Array.from(this.sessions.values()).map((s) => this.buildSummary(s));
+  }
+
+  recordCompactSnapshot(snapshot: CompactSnapshot): void {
+    let session = this.sessions.get(snapshot.session_id);
+    if (!session) {
+      session = {
+        session_id: snapshot.session_id,
+        project_dir: '',
+        current_task: '',
+        next_step: '',
+        journey: [],
+        sequence: 0,
+      };
+      this.sessions.set(snapshot.session_id, session);
+    }
+    session.last_compact = snapshot;
+    this.enforceMaxSessions(snapshot.session_id);
+    this.persist();
   }
 
   delete(sessionId: string, entryId?: string): boolean {
@@ -214,10 +288,23 @@ export class MemoryStore {
       };
     });
 
+    if (session.last_compact) {
+      const tail = readTranscriptTail(session.last_compact.transcript_path, this.config.compact_tail_n);
+      for (let i = 0; i < tail.length; i++) {
+        journey.push({
+          id: `tail-${i}`,
+          content: tail[i],
+          importance: 'minor',
+          age: 0,
+        });
+      }
+    }
+
     return {
       current_task: session.current_task,
       next_step: session.next_step,
       journey,
+      last_compact: session.last_compact,
     };
   }
 
