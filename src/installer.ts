@@ -2,6 +2,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  realpathSync,
   renameSync,
   writeFileSync,
 } from 'node:fs';
@@ -13,7 +14,6 @@ export interface InstallerPaths {
   marker_path: string;
 }
 
-export const HOOK_COMMAND = 'npx -y @julskim/hippocampus-mcp --precompact';
 const HOOK_MATCHER = '*';
 
 export function defaultPaths(): InstallerPaths {
@@ -21,6 +21,31 @@ export function defaultPaths(): InstallerPaths {
     settings_path: resolve(homedir(), '.claude', 'settings.json'),
     marker_path: resolve(homedir(), '.hippocampus', '.installed'),
   };
+}
+
+export const HOOK_SENTINEL = 'HIPPOCAMPUS_MCP_HOOK=1';
+
+export function buildHookCommand(scriptPath: string): string {
+  return `${HOOK_SENTINEL} "${process.execPath}" "${scriptPath}" --precompact`;
+}
+
+export function resolveEntrypoint(): string {
+  const raw = process.argv[1];
+  if (!raw) throw new Error('cannot resolve entrypoint (process.argv[1] empty)');
+  try {
+    return realpathSync(raw);
+  } catch {
+    return raw;
+  }
+}
+
+export function isHippocampusHook(cmd: string): boolean {
+  if (!cmd.includes('--precompact')) return false;
+  return (
+    cmd.includes(HOOK_SENTINEL) ||
+    cmd.includes('hippocampus-mcp') ||
+    cmd.includes('@julskim/hippocampus-mcp')
+  );
 }
 
 interface HookCommand {
@@ -38,34 +63,46 @@ interface Settings {
   [key: string]: unknown;
 }
 
-export function isInstalled(paths: InstallerPaths = defaultPaths()): boolean {
-  return existsSync(paths.marker_path);
-}
+export type InstallResult = 'installed' | 'updated' | 'skipped';
 
-export function install(paths: InstallerPaths = defaultPaths()): 'installed' | 'skipped' {
-  if (isInstalled(paths)) return 'skipped';
-
+export function install(
+  paths: InstallerPaths = defaultPaths(),
+  entrypoint: string = resolveEntrypoint(),
+): InstallResult {
+  const desiredCommand = buildHookCommand(entrypoint);
   const settings = readSettings(paths.settings_path);
-  const updated = mergeHook(settings);
+  const { settings: updated, outcome } = mergeHook(settings, desiredCommand);
+
+  if (outcome === 'skipped') {
+    writeMarker(paths.marker_path);
+    return 'skipped';
+  }
 
   writeSettingsAtomic(paths.settings_path, updated);
   writeMarker(paths.marker_path);
-
-  return 'installed';
+  return outcome;
 }
 
 export function run(paths: InstallerPaths = defaultPaths()): void {
-  if (isInstalled(paths)) return;
-
-  process.stderr.write(
-    `[hippocampus-mcp] ⚠️  First-run: installing PreCompact hook to ${paths.settings_path}\n`,
-  );
+  let entrypoint: string;
+  try {
+    entrypoint = resolveEntrypoint();
+  } catch (err) {
+    process.stderr.write(
+      `[hippocampus-mcp] ✗ Install skipped: ${(err as Error).message}\n`,
+    );
+    return;
+  }
 
   try {
-    const result = install(paths);
+    const result = install(paths, entrypoint);
     if (result === 'installed') {
       process.stderr.write(
-        `[hippocampus-mcp] ✓ Installed (delete ${paths.marker_path} to re-run setup)\n`,
+        `[hippocampus-mcp] ✓ PreCompact hook installed at ${paths.settings_path}\n`,
+      );
+    } else if (result === 'updated') {
+      process.stderr.write(
+        `[hippocampus-mcp] ✓ PreCompact hook updated (entrypoint path refreshed)\n`,
       );
     }
   } catch (err) {
@@ -85,25 +122,52 @@ function readSettings(path: string): Settings {
   }
 }
 
-export function mergeHook(settings: Settings): Settings {
+export function mergeHook(
+  settings: Settings,
+  desiredCommand: string,
+): { settings: Settings; outcome: InstallResult } {
   const next: Settings = { ...settings };
   const hooks = { ...(next.hooks ?? {}) };
-  const preCompact = [...(hooks.PreCompact ?? [])];
+  const existing = hooks.PreCompact ?? [];
 
-  const alreadyPresent = preCompact.some((entry) =>
-    entry.hooks?.some((h) => h.command === HOOK_COMMAND),
-  );
+  const foreign: HookMatcher[] = [];
+  const hippocampusCommands: string[] = [];
 
-  if (!alreadyPresent) {
-    preCompact.push({
-      matcher: HOOK_MATCHER,
-      hooks: [{ type: 'command', command: HOOK_COMMAND }],
-    });
+  for (const entry of existing) {
+    const ownHooks = entry.hooks ?? [];
+    const retainedHooks: HookCommand[] = [];
+    for (const h of ownHooks) {
+      if (isHippocampusHook(h.command)) {
+        hippocampusCommands.push(h.command);
+      } else {
+        retainedHooks.push(h);
+      }
+    }
+    if (retainedHooks.length > 0) {
+      foreign.push({ ...entry, hooks: retainedHooks });
+    }
   }
+
+  const alreadyCorrect =
+    hippocampusCommands.length === 1 && hippocampusCommands[0] === desiredCommand;
+
+  if (alreadyCorrect) {
+    return { settings, outcome: 'skipped' };
+  }
+
+  const preCompact: HookMatcher[] = [
+    ...foreign,
+    {
+      matcher: HOOK_MATCHER,
+      hooks: [{ type: 'command', command: desiredCommand }],
+    },
+  ];
 
   hooks.PreCompact = preCompact;
   next.hooks = hooks;
-  return next;
+
+  const outcome: InstallResult = hippocampusCommands.length === 0 ? 'installed' : 'updated';
+  return { settings: next, outcome };
 }
 
 function writeSettingsAtomic(path: string, data: Settings): void {

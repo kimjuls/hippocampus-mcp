@@ -35,7 +35,7 @@ async function main() {
   });
 
   const server = new McpServer(
-    { name: 'hippocampus-mcp', version: '0.2.0' },
+    { name: 'hippocampus-mcp', version: '0.2.1' },
     { instructions: INSTRUCTIONS },
   );
 
