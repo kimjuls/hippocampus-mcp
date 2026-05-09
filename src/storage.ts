@@ -29,58 +29,176 @@ const DEFAULT_CONFIG: StorageConfig = {
   compact_tail_n: 20,
 };
 
+// Per-line ceiling for a synthesized tail entry. Sized to fit roughly 2-3
+// substantive blocks per turn (~200 chars each) plus small markers, so the
+// post-compact journey view stays bounded even on chatty turns.
+const MAX_TAIL_LINE_CHARS = 480;
+const MAX_BLOCK_TEXT_CHARS = 200;
+const MAX_TOOL_USE_INPUT_CHARS = 120;
+const MAX_THINKING_CHARS = 160;
+
+// Whitelist of substantive transcript turn types. Meta JSONL entries
+// (custom-title, last-prompt, file-history-snapshot, etc.) are excluded so
+// they cannot consume tail slots and push real turns out of the window.
+const SUBSTANTIVE_TYPES = new Set(['user', 'assistant']);
+
+interface TranscriptEntry {
+  type?: string;
+  message?: {
+    content?: unknown;
+  };
+}
+
 export function readTranscriptTail(path: string, n: number): string[] {
   if (!existsSync(path)) return [];
   try {
     const raw = readFileSync(path, 'utf-8');
-    const lines = raw.split('\n').filter((l) => l.trim().length > 0);
-    return lines.slice(-n).map(summarizeTranscriptLine);
+    const entries: TranscriptEntry[] = [];
+    for (const line of raw.split('\n')) {
+      const trimmed = line.trim();
+      if (trimmed.length === 0) continue;
+      const parsed = tryParseTranscriptLine(trimmed);
+      if (!parsed) continue;
+      if (typeof parsed.type !== 'string') continue;
+      if (!SUBSTANTIVE_TYPES.has(parsed.type)) continue;
+      entries.push(parsed);
+    }
+    return entries.slice(-n).map(summarizeTranscriptEntry);
   } catch {
     return [];
   }
 }
 
-function summarizeTranscriptLine(line: string): string {
+function tryParseTranscriptLine(line: string): TranscriptEntry | null {
   try {
-    const entry = JSON.parse(line);
-    const type = entry.type ?? 'unknown';
-
-    if (type === 'user') {
-      const text = extractText(entry.message?.content);
-      return `[user] ${truncate(text, 200)}`;
-    }
-    if (type === 'assistant') {
-      const blocks = entry.message?.content;
-      if (Array.isArray(blocks)) {
-        const parts: string[] = [];
-        for (const block of blocks) {
-          if (block?.type === 'text' && typeof block.text === 'string') {
-            parts.push(truncate(block.text, 200));
-          } else if (block?.type === 'tool_use') {
-            parts.push(`[tool_use:${block.name ?? '?'}]`);
-          }
-        }
-        return `[assistant] ${parts.join(' ')}`;
-      }
-    }
-    return `[${type}]`;
+    const obj = JSON.parse(line);
+    return obj && typeof obj === 'object' ? (obj as TranscriptEntry) : null;
   } catch {
-    return truncate(line, 200);
+    return null;
   }
 }
 
-function extractText(content: unknown): string {
+function summarizeTranscriptEntry(entry: TranscriptEntry): string {
+  if (entry.type === 'user') {
+    return capLine(`[user] ${summarizeUserContent(entry.message?.content)}`);
+  }
+  if (entry.type === 'assistant') {
+    return capLine(`[assistant] ${summarizeAssistantContent(entry.message?.content)}`);
+  }
+  // Unreachable in practice: readTranscriptTail filters on type. Kept as a
+  // clear marker if the whitelist ever broadens.
+  return capLine(`[${entry.type ?? 'unknown'}]`);
+}
+
+function summarizeUserContent(content: unknown): string {
+  // Plain-string content (legacy / simple fixtures).
+  if (typeof content === 'string') return truncate(content, MAX_BLOCK_TEXT_CHARS);
+  if (!Array.isArray(content)) return '';
+
+  const parts: string[] = [];
+  for (const block of content) {
+    if (!block || typeof block !== 'object') continue;
+    const b = block as { type?: string; text?: unknown; content?: unknown };
+    if (b.type === 'text' && typeof b.text === 'string') {
+      parts.push(truncate(b.text, MAX_BLOCK_TEXT_CHARS));
+    } else if (b.type === 'tool_result') {
+      const excerpt = extractToolResultText(b.content);
+      parts.push(
+        excerpt
+          ? `[tool_result] "${truncate(excerpt, MAX_BLOCK_TEXT_CHARS)}"`
+          : '[tool_result]',
+      );
+    }
+  }
+  return parts.join(' ');
+}
+
+function summarizeAssistantContent(content: unknown): string {
+  if (typeof content === 'string') return truncate(content, MAX_BLOCK_TEXT_CHARS);
+  if (!Array.isArray(content)) return '';
+
+  const parts: string[] = [];
+  for (const block of content) {
+    if (!block || typeof block !== 'object') continue;
+    const b = block as {
+      type?: string;
+      text?: unknown;
+      thinking?: unknown;
+      name?: unknown;
+      input?: unknown;
+    };
+    if (b.type === 'text' && typeof b.text === 'string') {
+      parts.push(truncate(b.text, MAX_BLOCK_TEXT_CHARS));
+    } else if (b.type === 'thinking' && typeof b.thinking === 'string') {
+      parts.push(`[thinking] ${truncate(b.thinking, MAX_THINKING_CHARS)}`);
+    } else if (b.type === 'tool_use') {
+      const name = typeof b.name === 'string' ? b.name : '?';
+      const inputExcerpt = formatToolUseInput(name, b.input);
+      parts.push(inputExcerpt ? `[tool_use:${name} ${inputExcerpt}]` : `[tool_use:${name}]`);
+    }
+  }
+  return parts.join(' ');
+}
+
+function extractToolResultText(content: unknown): string {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
-    const block = content.find((b) => b && typeof b === 'object' && (b as { type?: string }).type === 'text');
-    const text = (block as { text?: string } | undefined)?.text;
-    return typeof text === 'string' ? text : '';
+    const texts: string[] = [];
+    for (const block of content) {
+      if (!block || typeof block !== 'object') continue;
+      const b = block as { type?: string; text?: unknown };
+      if (b.type === 'text' && typeof b.text === 'string') texts.push(b.text);
+    }
+    return texts.join(' ');
   }
   return '';
 }
 
+function formatToolUseInput(toolName: string, input: unknown): string {
+  if (!input || typeof input !== 'object') return '';
+  const obj = input as Record<string, unknown>;
+
+  // Prefer a known descriptive field per tool so the breadcrumb is readable.
+  for (const field of preferredFieldsFor(toolName)) {
+    const value = obj[field];
+    if (typeof value === 'string' && value.length > 0) {
+      return `${field}=${JSON.stringify(truncate(value, MAX_TOOL_USE_INPUT_CHARS))}`;
+    }
+  }
+
+  // Fallback: single-line JSON excerpt of the whole input.
+  const json = JSON.stringify(obj);
+  if (!json || json === '{}') return '';
+  return truncate(json.replace(/\s+/g, ' '), MAX_TOOL_USE_INPUT_CHARS);
+}
+
+function preferredFieldsFor(toolName: string): readonly string[] {
+  switch (toolName) {
+    case 'Bash':
+      return ['command'];
+    case 'Read':
+    case 'Edit':
+    case 'Write':
+    case 'NotebookEdit':
+      return ['file_path'];
+    case 'Grep':
+    case 'Glob':
+      return ['pattern'];
+    case 'WebFetch':
+      return ['url'];
+    case 'WebSearch':
+      return ['query'];
+    default:
+      return [];
+  }
+}
+
 function truncate(s: string, max: number): string {
   return s.length > max ? `${s.slice(0, max)}…` : s;
+}
+
+function capLine(line: string): string {
+  return truncate(line, MAX_TAIL_LINE_CHARS);
 }
 
 export class MemoryStore {
