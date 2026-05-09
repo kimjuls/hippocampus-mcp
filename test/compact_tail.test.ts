@@ -76,11 +76,206 @@ describe('readTranscriptTail', () => {
     expect(result[0]).toContain('…');
   });
 
-  it('falls back to raw line for malformed JSON', () => {
-    writeFileSync(transcriptPath, 'not valid json here\n');
-    const result = readTranscriptTail(transcriptPath, 1);
+  it('filters out malformed JSON lines instead of surfacing raw text', () => {
+    writeFileSync(
+      transcriptPath,
+      `not valid json here\n${JSON.stringify({ type: 'user', message: { content: 'real turn' } })}\n`,
+    );
+    const result = readTranscriptTail(transcriptPath, 5);
+    // Malformed lines are not substantive turns and must not occupy a tail slot.
     expect(result).toHaveLength(1);
-    expect(result[0]).toContain('not valid json');
+    expect(result[0]).toContain('real turn');
+    expect(result[0]).not.toContain('not valid json');
+  });
+
+  it('skips meta-type lines so tail slots reflect substantive turns only', () => {
+    writeTranscript([
+      { type: 'custom-title', title: 'My title' },
+      { type: 'user', message: { content: 'a' } },
+      { type: 'last-prompt', prompt: 'something' },
+      { type: 'assistant', message: { content: [{ type: 'text', text: 'b' }] } },
+      { type: 'file-history-snapshot', files: [] },
+      { type: 'user', message: { content: 'c' } },
+    ]);
+    const result = readTranscriptTail(transcriptPath, 3);
+    expect(result).toHaveLength(3);
+    expect(result[0]).toContain('a');
+    expect(result[1]).toContain('b');
+    expect(result[2]).toContain('c');
+    for (const line of result) {
+      expect(line).not.toContain('[custom-title]');
+      expect(line).not.toContain('[last-prompt]');
+      expect(line).not.toContain('[file-history-snapshot]');
+    }
+  });
+
+  it('extracts tool_result string content on user lines', () => {
+    writeTranscript([
+      {
+        type: 'user',
+        message: {
+          content: [{ type: 'tool_result', content: 'tests passed (87)' }],
+        },
+      },
+    ]);
+    const result = readTranscriptTail(transcriptPath, 1);
+    expect(result[0]).toContain('[user]');
+    expect(result[0]).toContain('[tool_result]');
+    expect(result[0]).toContain('tests passed (87)');
+  });
+
+  it('extracts tool_result array text blocks on user lines', () => {
+    writeTranscript([
+      {
+        type: 'user',
+        message: {
+          content: [
+            {
+              type: 'tool_result',
+              content: [
+                { type: 'text', text: 'line1' },
+                { type: 'text', text: 'line2' },
+              ],
+            },
+          ],
+        },
+      },
+    ]);
+    const result = readTranscriptTail(transcriptPath, 1);
+    expect(result[0]).toContain('[tool_result]');
+    expect(result[0]).toContain('line1');
+    expect(result[0]).toContain('line2');
+  });
+
+  it('marks empty tool_result without an excerpt', () => {
+    writeTranscript([
+      {
+        type: 'user',
+        message: { content: [{ type: 'tool_result', content: [] }] },
+      },
+    ]);
+    const result = readTranscriptTail(transcriptPath, 1);
+    expect(result[0]).toContain('[tool_result]');
+    expect(result[0]).not.toContain('"');
+  });
+
+  it('includes Bash command excerpt on assistant tool_use', () => {
+    writeTranscript([
+      {
+        type: 'assistant',
+        message: {
+          content: [{ type: 'tool_use', name: 'Bash', input: { command: 'npm test' } }],
+        },
+      },
+    ]);
+    const result = readTranscriptTail(transcriptPath, 1);
+    expect(result[0]).toContain('[tool_use:Bash');
+    expect(result[0]).toContain('command=');
+    expect(result[0]).toContain('npm test');
+  });
+
+  it('includes file_path excerpt for Read/Edit/Write tool_use', () => {
+    writeTranscript([
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'tool_use', name: 'Read', input: { file_path: '/abs/src/storage.ts' } },
+            { type: 'tool_use', name: 'Edit', input: { file_path: '/abs/test/x.test.ts' } },
+            { type: 'tool_use', name: 'Write', input: { file_path: '/abs/new.ts' } },
+          ],
+        },
+      },
+    ]);
+    const result = readTranscriptTail(transcriptPath, 1);
+    expect(result[0]).toContain('file_path=');
+    expect(result[0]).toContain('/abs/src/storage.ts');
+    expect(result[0]).toContain('/abs/test/x.test.ts');
+    expect(result[0]).toContain('/abs/new.ts');
+  });
+
+  it('includes pattern excerpt for Grep / Glob tool_use', () => {
+    writeTranscript([
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'tool_use', name: 'Grep', input: { pattern: 'TODO\\b' } },
+            { type: 'tool_use', name: 'Glob', input: { pattern: '**/*.ts' } },
+          ],
+        },
+      },
+    ]);
+    const result = readTranscriptTail(transcriptPath, 1);
+    expect(result[0]).toContain('pattern=');
+    expect(result[0]).toContain('TODO');
+    expect(result[0]).toContain('**/*.ts');
+  });
+
+  it('falls back to JSON excerpt for unknown tool_use names', () => {
+    writeTranscript([
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'tool_use', name: 'CustomTool', input: { foo: 'bar', baz: 1 } },
+          ],
+        },
+      },
+    ]);
+    const result = readTranscriptTail(transcriptPath, 1);
+    expect(result[0]).toContain('[tool_use:CustomTool');
+    expect(result[0]).toContain('foo');
+    expect(result[0]).toContain('bar');
+  });
+
+  it('omits the input excerpt entirely when input is empty', () => {
+    writeTranscript([
+      {
+        type: 'assistant',
+        message: {
+          content: [{ type: 'tool_use', name: 'Read', input: {} }],
+        },
+      },
+    ]);
+    const result = readTranscriptTail(transcriptPath, 1);
+    // Back-compat with the legacy shape: bare [tool_use:Read] when no input.
+    expect(result[0]).toContain('[tool_use:Read]');
+    expect(result[0]).not.toContain('file_path=');
+  });
+
+  it('surfaces thinking-only assistant turns', () => {
+    writeTranscript([
+      {
+        type: 'assistant',
+        message: {
+          content: [{ type: 'thinking', thinking: 'why is this empty?' }],
+        },
+      },
+    ]);
+    const result = readTranscriptTail(transcriptPath, 1);
+    expect(result[0]).toContain('[thinking]');
+    expect(result[0]).toContain('why is this empty?');
+  });
+
+  it('caps each tail line at the configured ceiling', () => {
+    const big = 'x'.repeat(300);
+    writeTranscript([
+      {
+        type: 'assistant',
+        message: {
+          content: [
+            { type: 'text', text: big },
+            { type: 'text', text: big },
+            { type: 'text', text: big },
+          ],
+        },
+      },
+    ]);
+    const result = readTranscriptTail(transcriptPath, 1);
+    // 480-char ceiling enforced by capLine; allow +1 for the ellipsis char.
+    expect(result[0].length).toBeLessThanOrEqual(481);
+    expect(result[0]).toContain('…');
   });
 });
 
